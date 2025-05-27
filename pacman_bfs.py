@@ -7,11 +7,11 @@ import random
 pygame.init()
 
 # Game constants
-WIDTH, HEIGHT = 2560, 1408  # 40 cols * 64, 22 rows * 64
+WIDTH, HEIGHT = 1792, 1024  # 28 cols * 64, 16 rows * 64
 GRID_SIZE = 64
-GRID_WIDTH = WIDTH // GRID_SIZE  # 40
-GRID_HEIGHT = HEIGHT // GRID_SIZE  # 22
-FPS = 20
+GRID_WIDTH = WIDTH // GRID_SIZE  # 28
+GRID_HEIGHT = HEIGHT // GRID_SIZE  # 16
+FPS = 60
 
 # Colors
 BLACK = (0, 0, 0)
@@ -42,7 +42,7 @@ def load_image(name, colorkey=None, scale=1):
         surf.fill(WHITE if "dot" in name else BLACK)
         return surf
 
-def generate_random_maze(width, height, wall_prob=0.28):  # lebih banyak wall
+def generate_random_maze(width, height, wall_prob=0.38):  # lebih banyak wall, lebih kompleks
     maze = []
     for y in range(height):
         row = ""
@@ -50,8 +50,8 @@ def generate_random_maze(width, height, wall_prob=0.28):  # lebih banyak wall
             if x == 0 or y == 0 or x == width-1 or y == height-1:
                 row += "1"  # wall at border
             else:
-                # Buat jalur utama horizontal dan vertikal agar tidak buntu total
-                if (y % 4 == 0 or x % 6 == 0) and random.random() > 0.2:
+                # Jalur utama lebih jarang, maze lebih random
+                if (y % 5 == 0 or x % 7 == 0) and random.random() > 0.35:
                     row += "0"
                 else:
                     row += "1" if random.random() < wall_prob else "0"
