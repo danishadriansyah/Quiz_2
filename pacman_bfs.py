@@ -150,8 +150,12 @@ class Maze:
     def draw(self, screen):
         for x, y in self.walls:
             block_img = load_image("block1.png")
+            # Cek apakah block ini bagian dari wall horizontal
+            is_horizontal = ((x-1, y) in self.walls) or ((x+1, y) in self.walls)
+            if is_horizontal:
+                block_img = pygame.transform.rotate(block_img, 90)
             screen.blit(block_img, (x * GRID_SIZE, y * GRID_SIZE))
-        
+
         for x, y in self.dots:
             dot_img = load_image("dot.png", scale=0.5)  # Skala dot lebih kecil
             screen.blit(dot_img, (x * GRID_SIZE + (GRID_SIZE - dot_img.get_width()) // 2,
