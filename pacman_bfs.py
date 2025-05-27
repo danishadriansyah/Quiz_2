@@ -7,10 +7,10 @@ import random
 pygame.init()
 
 # Game constants
-WIDTH, HEIGHT = 1300, 700
-GRID_SIZE = 64  # Sesuai dengan ukuran asset 64x64
-GRID_WIDTH = WIDTH // GRID_SIZE
-GRID_HEIGHT = HEIGHT // GRID_SIZE
+WIDTH, HEIGHT = 2560, 1408  # 40 cols * 64, 22 rows * 64
+GRID_SIZE = 64
+GRID_WIDTH = WIDTH // GRID_SIZE  # 40
+GRID_HEIGHT = HEIGHT // GRID_SIZE  # 22
 FPS = 20
 
 # Colors
@@ -27,18 +27,12 @@ def load_image(name, colorkey=None, scale=1):
     try:
         full_path = os.path.join("assets", name)
         image = pygame.image.load(full_path)
-        # Karena gambar sudah 64x64, kita bisa langsung menggunakan convert_alpha
-        # tanpa scaling tambahan
-        if colorkey is not None:
-            image = image.convert()
-            if colorkey == -1:
-                colorkey = image.get_at((0, 0))
-            image.set_colorkey(colorkey)
-        else:
-            image = image.convert_alpha()
-        
-        # Skala hanya jika diperlukan (untuk dot yang mungkin lebih kecil)
-        if scale != 1:
+        image = image.convert_alpha()
+        # Jika gambar ghost (atau apapun selain dot), scale ke GRID_SIZE (64x64)
+        if scale != 1 or name.endswith('.png'):
+            image = pygame.transform.scale(image, (GRID_SIZE, GRID_SIZE))
+        # Untuk dot, tetap gunakan scale kecil jika diperlukan
+        if "dot" in name and scale != 1:
             target_size = int(GRID_SIZE * scale)
             image = pygame.transform.scale(image, (target_size, target_size))
         return image
@@ -48,7 +42,7 @@ def load_image(name, colorkey=None, scale=1):
         surf.fill(WHITE if "dot" in name else BLACK)
         return surf
 
-def generate_random_maze(width, height, wall_prob=0.2):
+def generate_random_maze(width, height, wall_prob=0.28):  # lebih banyak wall
     maze = []
     for y in range(height):
         row = ""
@@ -56,7 +50,11 @@ def generate_random_maze(width, height, wall_prob=0.2):
             if x == 0 or y == 0 or x == width-1 or y == height-1:
                 row += "1"  # wall at border
             else:
-                row += "1" if random.random() < wall_prob else "0"
+                # Buat jalur utama horizontal dan vertikal agar tidak buntu total
+                if (y % 4 == 0 or x % 6 == 0) and random.random() > 0.2:
+                    row += "0"
+                else:
+                    row += "1" if random.random() < wall_prob else "0"
         maze.append(row)
     return maze
 
@@ -101,7 +99,7 @@ maze_layout = [
 
 class Maze:
     def __init__(self):
-        width, height = 20, 11  # sesuai layout lama
+        width, height = GRID_WIDTH, GRID_HEIGHT  # Now uses updated values
         self.walls = []
         self.dots = []
         self.player_pos = None
@@ -126,14 +124,14 @@ class Maze:
                     self.walls.append((x, y))
                 elif char == "0":
                     self.dots.append((x, y))
-        
+
         if not self.player_pos:
             self.player_pos = (1, 1)
         if not self.ghost_positions:
             self.ghost_positions = [
-                (8, 5),    # Tengah maze
-                (18, 1),   # Pojok kanan atas
-                (1, 9)     # Pojok kiri bawah
+                (width // 2, height // 2),
+                (width - 2, 1),
+                (1, height - 2)
             ]
 
     def is_wall(self, pos):
@@ -191,35 +189,72 @@ class Player:
         screen.blit(rotated_img, (self.x * GRID_SIZE + x_offset, self.y * GRID_SIZE + y_offset))
 
 class Ghost:
-    def __init__(self, x, y, image_name):
+    def __init__(self, x, y, image_name, ghost_type="blinky"):
         self.x = x
         self.y = y
         self.image = load_image(image_name)  # Tidak perlu scale karena sudah 64x64
-    
+        self.ghost_type = ghost_type
+
+    def get_target(self, maze, player, ghosts):
+        if self.ghost_type == "blinky":
+            # Blinky mengejar Pac-Man langsung
+            return (player.x, player.y)
+        elif self.ghost_type == "pinky":
+            # Pinky mengejar 4 langkah di depan arah Pac-Man
+            dx, dy = player.direction
+            tx = player.x + 4 * dx
+            ty = player.y + 4 * dy
+            # Pastikan target di dalam maze dan bukan wall
+            if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT and not maze.is_wall((tx, ty)):
+                return (tx, ty)
+            else:
+                return (player.x, player.y)
+        elif self.ghost_type == "inky":
+            # Inky: vektor dari Blinky ke 2 langkah di depan Pac-Man, lalu diperpanjang dua kali
+            blinky = next(g for g in ghosts if g.ghost_type == "blinky")
+            dx, dy = player.direction
+            px = player.x + 2 * dx
+            py = player.y + 2 * dy
+            vx = px - blinky.x
+            vy = py - blinky.y
+            tx = blinky.x + 2 * vx
+            ty = blinky.y + 2 * vy
+            if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT and not maze.is_wall((tx, ty)):
+                return (tx, ty)
+            else:
+                return (player.x, player.y)
+        elif self.ghost_type == "clyde":
+            # Clyde: jika jauh dari Pac-Man, kejar Pac-Man, jika dekat, ke pojok kiri bawah
+            dist = abs(self.x - player.x) + abs(self.y - player.y)
+            if dist >= 5:
+                return (player.x, player.y)
+            else:
+                return (1, GRID_HEIGHT - 2)
+        else:
+            return (player.x, player.y)
+
     def bfs_move(self, maze, target):
         queue = deque([(self.x, self.y, [])])
         visited = {(self.x, self.y)}
-        
         while queue:
             x, y, path = queue.popleft()
             if (x, y) == target:
                 return path[0] if path else (0, 0)
-            
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                 nx, ny = x + dx, y + dy
                 if (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT and 
                     not maze.is_wall((nx, ny)) and (nx, ny) not in visited):
                     visited.add((nx, ny))
                     queue.append((nx, ny, path + [(dx, dy)]))
-        
         return (0, 0)
-    
-    def update(self, maze, player_pos):
-        dx, dy = self.bfs_move(maze, player_pos)
+
+    def update(self, maze, player, ghosts):
+        target = self.get_target(maze, player, ghosts)
+        dx, dy = self.bfs_move(maze, target)
         new_x, new_y = self.x + dx, self.y + dy
         if not maze.is_wall((new_x, new_y)):
             self.x, self.y = new_x, new_y
-    
+
     def draw(self, screen):
         x_offset = (GRID_SIZE - self.image.get_width()) // 2
         y_offset = (GRID_SIZE - self.image.get_height()) // 2
@@ -229,17 +264,14 @@ def main():
     maze = Maze()
     player = Player(maze.player_pos[0], maze.player_pos[1])
     ghosts = [
-        Ghost(maze.ghost_positions[0][0], maze.ghost_positions[0][1], "ghost1.png"),
-        Ghost(maze.ghost_positions[1][0], maze.ghost_positions[1][1], "ghost2.png"),
-        Ghost(maze.ghost_positions[2][0], maze.ghost_positions[2][1], "ghost3.png")
+        Ghost(maze.ghost_positions[0][0], maze.ghost_positions[0][1], "blinky.png", "blinky"),
+        Ghost(maze.ghost_positions[1][0], maze.ghost_positions[1][1], "pinky.png", "pinky"),
+        Ghost(maze.ghost_positions[2][0], maze.ghost_positions[2][1], "inky.png", "inky"),
+        Ghost(maze.ghost_positions[2][0], maze.ghost_positions[2][1], "clyde.png", "clyde"),
     ]
-    
-    if len(maze.ghost_positions) > 3:
-        ghosts.append(Ghost(maze.ghost_positions[3][0], maze.ghost_positions[3][1], "ghost4.png"))
-    
     running = True
     score = 0
-    
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -253,13 +285,15 @@ def main():
                     player.next_direction = (-1, 0)
                 elif event.key == pygame.K_RIGHT:
                     player.next_direction = (1, 0)
+                elif event.key == pygame.K_ESCAPE:  # ESC untuk quit
+                    running = False
         
         player.update(maze)
         if maze.eat_dot((player.x, player.y)):
             score += 10
         
         for ghost in ghosts:
-            ghost.update(maze, (player.x, player.y))
+            ghost.update(maze, player, ghosts)
             if ghost.x == player.x and ghost.y == player.y:
                 print(f"Game Over! Score: {score}")
                 running = False
