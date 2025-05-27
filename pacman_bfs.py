@@ -159,7 +159,7 @@ class Maze:
         for x, y in self.dots:
             dot_img = load_image("dot.png", scale=0.5)  # Skala dot lebih kecil
             screen.blit(dot_img, (x * GRID_SIZE + (GRID_SIZE - dot_img.get_width()) // 2,
-                                y * GRID_SIZE + (GRID_SIZE - dot_img.get_height()) // 2))
+                                y * GRID_SIZE + (GRID_SIZE - dot_img.get_height()) // 2)) 
 
 class Player:
     def __init__(self, x, y):
