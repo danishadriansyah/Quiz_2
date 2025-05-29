@@ -6,7 +6,14 @@
 This is a Pac-Man game implemented using Pygame, featuring dynamically generated mazes and intelligent ghost AI powered by the Breadth-First Search (BFS) algorithm. Each ghost has a unique targeting strategy, making the gameplay challenging and engaging.
 
 -----
+## Team
+| Name           | NRP        | class     |
+| ---            | ---        | ----------|
+| Roofiif Alria Dzakwan | 5025221012 | DAA (G)|
+| Muhammad Danis Hardiansyah | 5025221239 | DAA (G) |
+-----
 
+-----
 ## Features
 
   * **Dynamic Maze Generation**: Every time you start the game, a new, randomized maze is created, ensuring fresh gameplay with each run.
