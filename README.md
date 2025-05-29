@@ -90,20 +90,8 @@ The project is organized into several modules for clarity and maintainability:
   * **Avoid Ghosts**: Do not let any of the four ghosts catch Pac-Man.
   * **Win**: Clear the entire maze by eating all the dots.
   * **Lose**: Get caught by a ghost.
-
 -----
 
-## Contributing
-
-Feel free to fork the repository, make improvements, and submit pull requests.
-
------
-
-## License
-
-This project is open source and available under the [MIT License](https://www.google.com/search?q=LICENSE).
-
------
 
 Tentu, saya akan tambahkan informasi atribusi aset tersebut ke dalam bagian "Acknowledgments" di README.md.
 
