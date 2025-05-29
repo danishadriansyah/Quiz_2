@@ -12,7 +12,6 @@ GRID_SIZE = 64
 GRID_WIDTH = WIDTH // GRID_SIZE  # 28
 GRID_HEIGHT = HEIGHT // GRID_SIZE  # 16
 FPS = 60
-MOVE_SPEED = 0.15  # Kecepatan pergerakan smooth (0.1 = lambat, 0.2 = cepat)
 
 # Colors
 BLACK = (0, 0, 0)
@@ -29,10 +28,8 @@ def load_image(name, colorkey=None, scale=1):
         full_path = os.path.join("assets", name)
         image = pygame.image.load(full_path)
         image = image.convert_alpha()
-        # Jika gambar ghost (atau apapun selain dot), scale ke GRID_SIZE (64x64)
         if scale != 1 or name.endswith('.png'):
             image = pygame.transform.scale(image, (GRID_SIZE, GRID_SIZE))
-        # Untuk dot, tetap gunakan scale kecil jika diperlukan
         if "dot" in name and scale != 1:
             target_size = int(GRID_SIZE * scale)
             image = pygame.transform.scale(image, (target_size, target_size))
@@ -164,14 +161,12 @@ class Player:
     def __init__(self, x, y):
         self.grid_x = x
         self.grid_y = y
-        self.x = float(x)  # Posisi pixel smooth
-        self.y = float(y)
         self.direction = (0, 0)
         self.next_direction = (0, 0)
         self.image = load_image("pac.png")
-        self.moving = False
     
     def update(self, maze):
+        # LANGSUNG bergerak tanpa counter!
         # Cek jika bisa berubah arah
         next_grid_x = self.grid_x + self.next_direction[0]
         next_grid_y = self.grid_y + self.next_direction[1]
@@ -179,45 +174,35 @@ class Player:
         if not maze.is_wall((next_grid_x, next_grid_y)):
             self.direction = self.next_direction
         
-        # Smooth movement
+        # Bergerak ke arah yang ditentukan
         if self.direction != (0, 0):
             target_grid_x = self.grid_x + self.direction[0]
             target_grid_y = self.grid_y + self.direction[1]
             
             if not maze.is_wall((target_grid_x, target_grid_y)):
-                # Bergerak smooth ke target
-                self.x += self.direction[0] * MOVE_SPEED
-                self.y += self.direction[1] * MOVE_SPEED
-                
-                # Cek jika sudah sampai grid berikutnya
-                if abs(self.x - target_grid_x) < 0.1 and abs(self.y - target_grid_y) < 0.1:
-                    self.grid_x = target_grid_x
-                    self.grid_y = target_grid_y
-                    self.x = float(target_grid_x)
-                    self.y = float(target_grid_y)
-    
+                self.grid_x = target_grid_x
+                self.grid_y = target_grid_y
+
     def draw(self, screen):
         angle = 0
-        if self.direction == (1, 0): angle = 0
-        elif self.direction == (-1, 0): angle = 180
-        elif self.direction == (0, -1): angle = 90
-        elif self.direction == (0, 1): angle = 270
+        if self.direction == (1, 0): angle = 0      # Kanan
+        elif self.direction == (-1, 0): angle = 180 # Kiri
+        elif self.direction == (0, -1): angle = 90  # Atas
+        elif self.direction == (0, 1): angle = 270  # Bawah
         
         rotated_img = pygame.transform.rotate(self.image, angle)
         x_offset = (GRID_SIZE - rotated_img.get_width()) // 2
         y_offset = (GRID_SIZE - rotated_img.get_height()) // 2
-        screen.blit(rotated_img, (self.x * GRID_SIZE + x_offset, self.y * GRID_SIZE + y_offset))
+        screen.blit(rotated_img, (self.grid_x * GRID_SIZE + x_offset, self.grid_y * GRID_SIZE + y_offset))
 
 class Ghost:
     def __init__(self, x, y, image_name, ghost_type="blinky"):
         self.grid_x = x
         self.grid_y = y
-        self.x = float(x)  # Posisi pixel smooth
-        self.y = float(y)
         self.image = load_image(image_name)
         self.ghost_type = ghost_type
         self.direction = (0, 0)
-        self.move_timer = 0
+        self.move_counter = 0  # Tetap pakai counter untuk ghost agar tidak terlalu cepat
 
     def get_target(self, maze, player, ghosts):
         if self.ghost_type == "blinky":
@@ -231,18 +216,18 @@ class Ghost:
             else:
                 return (player.grid_x, player.grid_y)
         elif self.ghost_type == "inky":
-            blinky = next(g for g in ghosts if g.ghost_type == "blinky")
-            dx, dy = player.direction
-            px = player.grid_x + 2 * dx
-            py = player.grid_y + 2 * dy
-            vx = px - blinky.grid_x
-            vy = py - blinky.grid_y
-            tx = blinky.grid_x + 2 * vx
-            ty = blinky.grid_y + 2 * vy
-            if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT and not maze.is_wall((tx, ty)):
-                return (tx, ty)
-            else:
-                return (player.grid_x, player.grid_y)
+            blinky = next((g for g in ghosts if g.ghost_type == "blinky"), None)
+            if blinky:
+                dx, dy = player.direction
+                px = player.grid_x + 2 * dx
+                py = player.grid_y + 2 * dy
+                vx = px - blinky.grid_x
+                vy = py - blinky.grid_y
+                tx = blinky.grid_x + 2 * vx
+                ty = blinky.grid_y + 2 * vy
+                if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT and not maze.is_wall((tx, ty)):
+                    return (tx, ty)
+            return (player.grid_x, player.grid_y)
         elif self.ghost_type == "clyde":
             dist = abs(self.grid_x - player.grid_x) + abs(self.grid_y - player.grid_y)
             if dist >= 5:
@@ -268,23 +253,20 @@ class Ghost:
         return (0, 0)
 
     def update(self, maze, player, ghosts):
-        # Update setiap beberapa frame agar ghost tidak terlalu cepat
-        self.move_timer += 1
-        if self.move_timer < 15:  # Ghost bergerak lebih lambat
-            return
-        self.move_timer = 0
-        
-        target = self.get_target(maze, player, ghosts)
-        dx, dy = self.bfs_move(maze, target)
-        new_x, new_y = self.grid_x + dx, self.grid_y + dy
-        if not maze.is_wall((new_x, new_y)):
-            self.grid_x, self.grid_y = new_x, new_y
-            self.x, self.y = float(new_x), float(new_y)
+        # Ghost tetap pakai counter tapi lebih cepat
+        self.move_counter += 1
+        if self.move_counter >= 5:  # Setiap 5 frames aja
+            self.move_counter = 0
+            target = self.get_target(maze, player, ghosts)
+            dx, dy = self.bfs_move(maze, target)
+            new_x, new_y = self.grid_x + dx, self.grid_y + dy
+            if not maze.is_wall((new_x, new_y)):
+                self.grid_x, self.grid_y = new_x, new_y
 
     def draw(self, screen):
         x_offset = (GRID_SIZE - self.image.get_width()) // 2
         y_offset = (GRID_SIZE - self.image.get_height()) // 2
-        screen.blit(self.image, (self.x * GRID_SIZE + x_offset, self.y * GRID_SIZE + y_offset))
+        screen.blit(self.image, (self.grid_x * GRID_SIZE + x_offset, self.grid_y * GRID_SIZE + y_offset))
 
 def main():
     maze = Maze()
